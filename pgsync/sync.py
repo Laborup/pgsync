@@ -490,9 +490,15 @@ class Sync(Base, metaclass=Singleton):
         our insert/update operation and sync the tree branch for that root.
         """
         fields: dict = defaultdict(list)
-        foreign_values: list = [
-            payload.new.get(key) for key in foreign_keys[node.name]
-        ]
+        foreign_values: list = []
+        for column in node.columns:
+            if isinstance(column, sa.Column):
+                for foreign_key in column.foreign_keys:
+                    referenced_column = foreign_key.column
+                    base_table = referenced_column.table
+                    if base_table.name == node.parent.table:
+                        foreign_values.append(payload.new.get(column.name))
+                        
         for key in [key.name for key in node.primary_keys]:
             for value in foreign_values:
                 if value:
