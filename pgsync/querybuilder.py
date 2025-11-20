@@ -339,10 +339,11 @@ class QueryBuilder(threading.local):
             # only return the intersection of columns that match
             if not table.startswith(f"{schema}."):
                 table = f"{schema}.{table}"
-            for i, value in enumerate(foreign_keys[table]):
-                if value not in columns:
-                    foreign_keys[table].pop(i)
-            return foreign_keys[table]
+            return [
+                value
+                for value in foreign_keys[table]
+                if value in column_names
+            ]
 
     def _get_child_keys(
         self, node: Node, params: dict
