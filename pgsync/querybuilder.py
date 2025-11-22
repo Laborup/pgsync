@@ -218,6 +218,11 @@ class QueryBuilder(threading.local):
             if not rel_fk:
                 continue
 
+            # Only consider the relationship if it connects node_a and node_b
+            other = node_b if node is node_a else node_a
+            if getattr(node, "parent", None) != other:
+                continue
+
             parent_tbl_key = node_table_key(node, prefer_parent=True)
             child_tbl_key = node_table_key(node, prefer_parent=False)
 
@@ -242,32 +247,40 @@ class QueryBuilder(threading.local):
             merge_side(getattr(rel_fk, "child", None), child_tbl_key)
 
         # SQLAlchemy introspection in both directions (A -> B and B -> A)
-        A = getattr(getattr(node_a, "model", None), "original", None)
-        B = getattr(getattr(node_b, "model", None), "original", None)
+        # Only perform introspection if no keys were found via schema hints
+        if not fkeys:
+            A = getattr(getattr(node_a, "model", None), "original", None)
+            B = getattr(getattr(node_b, "model", None), "original", None)
 
-        A_q = qname(A)
-        B_q = qname(B)
+            A_q = qname(A)
+            B_q = qname(B)
 
-        # helper to compare tables
-        def same_table(t1: t.Any, t2: t.Any) -> bool:
-            return qname(t1) is not None and qname(t1) == qname(t2)
+            # helper to compare tables
+            def same_table(t1: t.Any, t2: t.Any) -> bool:
+                return qname(t1) is not None and qname(t1) == qname(t2)
 
-        if A is not None and B is not None:
-            for fk in getattr(A, "foreign_keys", []):
-                # does A have an FK pointing to B?
-                if same_table(getattr(fk, "column", None).table, B):
-                    # child col in A
-                    add(qname(fk.parent.table), str(fk.parent.name))
-                    # parent col in B
-                    add(qname(fk.column.table), str(fk.column.name))
+            if A is not None and B is not None:
+                for fk in getattr(A, "foreign_keys", []):
+                    # does A have an FK pointing to B?
+                    if same_table(getattr(fk, "column", None).table, B):
+                        # child col in A
+                        add(qname(fk.parent.table), str(fk.parent.name))
+                        # parent col in B
+                        add(qname(fk.column.table), str(fk.column.name))
 
-            for fk in getattr(B, "foreign_keys", []):
-                # does B have an FK pointing to A?
-                if same_table(getattr(fk, "column", None).table, A):
-                    # child col in B
-                    add(qname(fk.parent.table), str(fk.parent.name))
-                    # parent col in A
-                    add(qname(fk.column.table), str(fk.column.name))
+                for fk in getattr(B, "foreign_keys", []):
+                    # does B have an FK pointing to A?
+                    if same_table(getattr(fk, "column", None).table, A):
+                        # child col in B
+                        add(qname(fk.parent.table), str(fk.parent.name))
+                        # parent col in A
+                        add(qname(fk.column.table), str(fk.column.name))
+        else:
+            # Define A_q and B_q for the error message below if needed
+            A = getattr(getattr(node_a, "model", None), "original", None)
+            B = getattr(getattr(node_b, "model", None), "original", None)
+            A_q = qname(A)
+            B_q = qname(B)
 
         if not fkeys:
             raise ForeignKeyError(
